@@ -1,0 +1,309 @@
+var hostParts = window.location.host.split('.');
+var blobFolder = 'qa/';
+var contentPath = '/contents/';
+var env = 'local';
+var domainWithEnvPlaceHolder = 'https://@@env.' + hostParts[1] + '.' + hostParts[2] + (hostParts.length > 3 ? '.' + hostParts[3] : '');
+var baseUrl = domainWithEnvPlaceHolder;
+var portalBaseURL = '';
+var countryCultureSlugPrefix = '';
+var ecomHostName = '';
+var bootstrapSrc = 'styles/bootstrap/bootstrap.min.css';
+var fontAwesomeSrc = 'fonts/fontawesome5-subset/css/all.min.css';
+var jQuerySrc = '/blob/common/scripts/jquery-3.5.1.min.js';
+// eslint-disable-next-line max-len
+var googleFontsSrc = 'https://fonts.googleapis.com/css?family=Montserrat:200,300,400,500,600,700|Source+Sans+Pro:200,300,400,600,700|Open+Sans:300,400,600,700,800|Roboto+Slab:100,300,400,700|Work+Sans:300,400,500,600,700|Merriweather:300,400,600,700';
+var resFileName = 'dev.json';
+var esShimSrc = 'scripts/es6/es6-shim.min.js';
+var portalDomainList = {
+    lcit: 'livecareer.it', lces: 'livecareer.es', lcfr: 'livecareer.fr', lcuk: 'livecareer.co.uk',
+    lcde: 'livecareer.de', lcnl: 'livecareer.nl', lcpl: 'livecareer.pl', lcpt: 'livecareer.pt',
+    lcbr: 'livecareer.com.br'
+};
+var domain, imgDir, litePortalCd,styleSheetDir, jsonFileDir, isLitePortalFlow, liteFlowCountrySlug = '';
+
+if (window.location.host.split('.').length > 2) {
+    domain = window.location.host.split(':')[0].substr(window.location.host.indexOf('.') + 1);
+} else {
+    domain = window.location.host;
+}
+
+switch (hostParts[0]) {
+case 'reg':
+case 'reg-app':
+case 'pen':
+    blobFolder = 'reg/';
+    resFileName = 'reg-1.0.0.742.json';
+    env =  hostParts[0] + '-assets' ;
+    break;
+case 'stg':
+case 'stg-app':
+    env = 'stg-assets';
+    blobFolder = 'stg/';
+    resFileName = 'stg-1.0.0.742.json';
+    break;
+case 'qa':
+case 'qa-app':
+    env = 'qa-assets';
+    blobFolder = 'qa/';
+    break;
+case 'perf':
+case 'perf-app':
+    blobFolder = 'reg/';
+    env =   hostParts[0] + '-assets' ;
+    break;
+case 'www':
+    blobFolder = 'prod/';
+    resFileName = 'prod-1.0.0.742.json';
+    env =  'assets'; 
+    break;
+}
+
+baseUrl = baseUrl.replace('@@env', env);
+function setLitePortalDetails() {
+    try {
+        var rawURLPath = window.location.pathname;
+        if (rawURLPath && rawURLPath.length > 0 && rawURLPath[0] == '/') {
+            rawURLPath = rawURLPath.replace('//', '/').substring(1);
+            const blackListedURLsList = ['lp', 'eb', 'cv'];
+            var segments = rawURLPath.split('/');
+            if (segments.length >= 1) {
+                segments[0] = segments[0].trim().toLowerCase();
+                if (segments[0].length == 2 && blackListedURLsList.indexOf(segments[0]) == -1) {
+                    countryCultureSlugPrefix = '/' + segments[0];
+                }
+                if (segments.length >= 2 && liteFlowCountrySlug) {
+                    segments[1] = segments[1].trim().toLowerCase();
+                    if (segments[1].length == 2 && blackListedURLsList.indexOf(segments[1]) == -1) {
+                        countryCultureSlugPrefix = '/' + segments[0] + '/' + segments[1];
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.error(error);
+    }
+    portalBaseURL = baseUrl + countryCultureSlugPrefix;
+    baseUrl = portalBaseURL + '/payment';
+    contentPath = baseUrl + contentPath;
+}
+
+function loadJsonFile(fileUrl, callback, isAsync, errorCallBack) {
+    if (window.$ != undefined && window.$ != null) {
+        window.$.ajax({
+            url: fileUrl,
+            method: 'GET',
+            async: isAsync,
+            cache: true,
+            dataType: 'json',
+            success: function (data) {
+                callback(data);
+            },
+            error: function () {
+                if (errorCallBack) {
+                    errorCallBack();
+                }
+            }
+        });
+    }
+    else {
+        var xmlhttp = new XMLHttpRequest();
+        xmlhttp.onreadystatechange = function () {
+            if (xmlhttp.readyState == XMLHttpRequest.DONE) {
+                if (xmlhttp.status == 200) {
+                    var data = JSON.parse(xmlhttp.responseText);
+                    callback(data);
+                }
+                else if (xmlhttp.status == 400) {
+                    console.error('There was an error 400 while fetching json file ');
+                }
+                else {
+                    console.error('something else other than 200 was returned while fetching json file');
+                }
+            }
+        };
+        xmlhttp.open('GET', fileUrl, true);
+        xmlhttp.send();
+    }
+}
+
+function setPortalDetails() {
+    let baseAPIURL = window.location.origin + countryCultureSlugPrefix + '/ecom/api/v1/';
+    let cultureslug = countryCultureSlugPrefix.substring(1);
+    let apiURL = baseAPIURL + 'config/portal?cultureslug=' + cultureslug;
+    loadJsonFile(apiURL,
+        function (response) {
+            if (response) {
+                isLitePortalFlow = response.is_lite;
+                liteFlowCountrySlug = response.country_slug;
+
+                jsonFileDir = styleSheetDir = liteFlowCountrySlug;
+                imgDir = 'l' + liteFlowCountrySlug;
+                litePortalCd='l' + liteFlowCountrySlug;
+                jQuerySrc = countryCultureSlugPrefix + jQuerySrc;
+
+                ecomHostName = window.location.hostname.substring(window.location.hostname.indexOf('.') + 1);
+                setContentDirectory(domain); //set css,styles and imageDirectory
+
+                prefetchAllFiles();
+            }
+        }, false);
+}
+
+setLitePortalDetails();
+setPortalDetails();
+
+function setContentDirectory(domain) {
+    if (isLitePortalFlow) {
+        imgDir = 'lclite';
+    }
+    else {
+        switch (domain) {
+        case portalDomainList['lcit']:
+            jsonFileDir = styleSheetDir = imgDir = 'lit';
+            break;
+        case portalDomainList['lcfr']:
+            jsonFileDir = styleSheetDir = imgDir = 'lfr';
+            break;
+        case portalDomainList['lcuk']:
+            styleSheetDir = 'luk';
+            imgDir = 'luk';
+            jsonFileDir = 'luk';
+            break;
+        case portalDomainList['lcpl']:
+            jsonFileDir = styleSheetDir = imgDir = 'lpl';
+            break;
+        case portalDomainList['lcde']:
+            jsonFileDir = styleSheetDir = imgDir = 'lde';
+            break;
+        case portalDomainList['lces']:
+            jsonFileDir = styleSheetDir = imgDir = 'les';
+            break;
+        case portalDomainList['lcpt']:
+            jsonFileDir = styleSheetDir = imgDir = 'lpt';
+            break;
+        case portalDomainList['lcnl']:
+            jsonFileDir = styleSheetDir = imgDir = 'lnl';
+            break;
+        case portalDomainList['lcbr']:
+            jsonFileDir = styleSheetDir = imgDir = 'lbr';
+            break;
+        default:
+            break;
+        }
+    }
+}
+
+function prefetchFiles(src, callback) {
+    try {
+        var s, r, t;
+        r = false;
+        s = document.createElement('link');
+        s.rel = 'prefetch';
+        s.href = src;
+        s.onload = s.onreadystatechange = function () {
+            if (!r && (!this.readyState || this.readyState == 'complete' || this.readyState == 'loaded')) {
+                r = true;
+                callback && callback();
+            }
+        };
+        t = document.getElementsByTagName('link')[0];
+        t.parentNode.insertBefore(s, t);
+    }
+    catch (err) {
+        window.console.info(err);
+    }
+}
+
+function loadImageFiles() {
+    prefetchFiles(portalBaseURL + '/blobimages/ecom/wlb/images/loading.gif');
+    prefetchFiles(portalBaseURL + '/blobimages/ecom/wlb/images/payment-icons.png');
+    if (imgDir){
+        var baseImgUrl = '/blobimages/ecom/' + imgDir + '/';
+        if (!isLitePortalFlow) {
+            prefetchFiles(portalBaseURL + baseImgUrl + 'images/contact-icon.png');
+            prefetchFiles(portalBaseURL + baseImgUrl + 'images/logo.svg');
+        }
+        if (imgDir != 'luk' && !isLitePortalFlow) {
+            prefetchFiles(portalBaseURL + baseImgUrl + 'images/customizer.svg');
+            prefetchFiles(portalBaseURL + baseImgUrl + 'images/jobsnowapp.svg');
+            prefetchFiles(portalBaseURL + baseImgUrl + 'images/loading.gif');
+            prefetchFiles(portalBaseURL + baseImgUrl + 'images/multiformat-small.svg');
+            prefetchFiles(portalBaseURL + baseImgUrl + 'images/refund.svg');
+            prefetchFiles(portalBaseURL + baseImgUrl + 'images/resumecheck-small.svg');
+            prefetchFiles(portalBaseURL + baseImgUrl + 'images/resumecheck.svg');
+            prefetchFiles(portalBaseURL + baseImgUrl + 'images/unlimitdownload-small.svg');
+            prefetchFiles(portalBaseURL + baseImgUrl + 'images/unlimitdownload.svg');
+        }
+        else if (imgDir == 'lclite') {
+            prefetchFiles(portalBaseURL + baseImgUrl + litePortalCd + '/sell-page-socialproof/images/trust_reviewer_1.png');
+            prefetchFiles(portalBaseURL + baseImgUrl + litePortalCd + '/sell-page-socialproof/images/trust_reviewer_2.png');
+            prefetchFiles(portalBaseURL + baseImgUrl + litePortalCd + '/sell-page-socialproof/images/trust_reviewer_3.png');
+            prefetchFiles(portalBaseURL + baseImgUrl + litePortalCd + '/sell-page-socialproof/images/trust_reviewer_4.png');
+            prefetchFiles(portalBaseURL + baseImgUrl + litePortalCd + '/sell-page-socialproof/images/trustpilot-logo.jpg');
+            prefetchFiles(portalBaseURL + baseImgUrl + litePortalCd + '/sell-page-socialproof/images/trustpilot-star.jpg');
+        }
+        else {
+            prefetchFiles(portalBaseURL + baseImgUrl + 'images/grey-arrow.png');
+        }
+        if (imgDir == 'lpl') {
+            prefetchFiles(portalBaseURL + baseImgUrl + 'images/aneta.png');
+            prefetchFiles(portalBaseURL + baseImgUrl + 'images/marcin.png');
+        }
+        if (imgDir == 'lfr') {
+            prefetchFiles(portalBaseURL + baseImgUrl + 'images/background-pre-cancel.png');
+        }
+        if (imgDir == 'les') {
+            prefetchFiles(portalBaseURL + baseImgUrl + 'sp-low-intent/images/middle-box-bground.png');
+        }
+    }
+    prefetchFiles(portalBaseURL + '/blobimages/ecom/wlb/images/bold-logo.png');
+    prefetchFiles(portalBaseURL + '/blobimages/ecom/wlb/images/Heather_spielmaker.png');
+    prefetchFiles(portalBaseURL + '/blobimages/ecom/wlb/images/hubert_baker.png');
+}
+
+function prefetchAllFiles() {
+    var runTimeBundleSrc = baseUrl + '/build/runtime.bundle-1.0.0.742.js';
+    var vendorBundleSrc = baseUrl + '/build/vendors.bundle-1.0.0.742.js';
+    var vendorReactBundleSrc = baseUrl + '/build/react.bundle-1.0.0.742.js';
+    var developerBundleSrc = baseUrl + '/build/app.bundle-1.0.0.742.js';
+    var plansBundleSrc = baseUrl + '/build/plans.bundle-1.0.0.742.js';
+    var appJsSrc = baseUrl + '/scripts/app-1.0.0.742.js';
+    var localisedTextJsonPath = baseUrl + '/contents/' + blobFolder + ecomHostName
+        + '/localizedText-1.0.0.742.json';
+    // eslint-disable-next-line max-len
+    var mainCssSrc = baseUrl + (isLitePortalFlow ? '/stylesheets/lclite/@@portalStyleDir/main-1.0.0.742.css' : '/stylesheets/@@portalStyleDir/main-1.0.0.742.css');
+    var resfilePath = baseUrl + '/contents/' + blobFolder + ecomHostName + '/' + resFileName;
+    var nrJsPath = baseUrl + '/contents/' + blobFolder + ecomHostName + '/nr.js';
+    var baseConfigPathForLite = baseUrl + '/contents/' + blobFolder
+        + 'lclite/config/' + styleSheetDir + '/config.base-1.0.0.742.json';
+    var nrJsPathForLite = baseUrl + '/contents/' + blobFolder + 'lclite/config/' + styleSheetDir + '/nr.js';
+    var resfilePathForLite = baseUrl + '/contents/' + blobFolder
+        + 'lclite/config/' + styleSheetDir + '/' + resFileName;
+
+    prefetchFiles(runTimeBundleSrc);		//prefetch vendor bundle
+    prefetchFiles(vendorBundleSrc);		//prefetch vendor bundle
+    prefetchFiles(vendorReactBundleSrc);		//prefetch vendor bundle
+    prefetchFiles(developerBundleSrc);	//prefetch developer bundle
+    prefetchFiles(plansBundleSrc);	//prefetch plans bundle
+    prefetchFiles(appJsSrc);	//prefetch app JS 
+    prefetchFiles(contentPath + bootstrapSrc);						//prefetch bootstrap CSS
+    prefetchFiles(contentPath + fontAwesomeSrc);						//prefetch fontawesome CSS
+    prefetchFiles(jQuerySrc);						//prefetch jQuery
+    prefetchFiles(contentPath + esShimSrc);
+    prefetchFiles(googleFontsSrc);					//prefetch googleFonts CSS
+    if (isLitePortalFlow) {
+        prefetchFiles(mainCssSrc.replace('@@portalStyleDir', styleSheetDir));			//prefetch main CSS 
+        // prefetchFiles(baseConfigPathForLite);            //prefetch ecom JSON
+        // prefetchFiles(resfilePathForLite);
+        // prefetchFiles(nrJsPathForLite);
+    }
+    else {
+        prefetchFiles(mainCssSrc.replace('@@portalStyleDir', styleSheetDir));			//prefetch main CSS 
+        // prefetchFiles(ecomJsonPath.replace('@@jsonFileDir', jsonFileDir));            //prefetch ecom JSON
+        // prefetchFiles(localisedTextJsonPath.replace('@@jsonFileDir',
+        //     jsonFileDir));   //prefetch ecom JSON (localizedText)
+        // prefetchFiles(resfilePath);
+        prefetchFiles(nrJsPath);
+    }
+    loadImageFiles();										//prefect image files
+}
